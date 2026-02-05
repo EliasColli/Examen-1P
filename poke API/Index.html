@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PokéDex con Filtros</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --txt:#5b5b5b; --muted:#9ca3af; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto;background:var(--bg);color:var(--txt)}
+    header{position:sticky;top:0;z-index:10;background:#020617;padding:12px;display:flex;gap:8px;flex-wrap:wrap}
+    input,select,label{background:#ffffff;color:var(--txt);border:1px solid #1f2937;border-radius:10px;padding:10px}
+    label{display:flex;align-items:center;gap:8px}
+    main{padding:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:10px;text-align:center}
+    .card img{width:120px;height:120px;object-fit:contain}
+    .id{color:var(--muted);font-size:12px}
+    .types{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+    .type{padding:4px 8px;border-radius:999px;font-size:12px}
+    .error{background:#7f1d1d;border:1px solid #991b1b;padding:12px;border-radius:12px}
+  </style>
+</head>
+
+<body>
+  <header>
+    <input id="q" placeholder="Buscar por nombre o número" />
+    <select id="types" multiple size="1"></select>
+    <label><input id="not" type="checkbox" /> NOT</label>
+  </header>
+  <main>
+    <div id="msg"></div>
+    <div id="grid" class="grid"></div>
+  </main>
+
+<script>
+const API = 'https://pokeapi.co/api/v2';
+const grid = document.getElementById('grid');
+const q = document.getElementById('q');
+const sel = document.getElementById('types');
+const not = document.getElementById('not');
+const msg = document.getElementById('msg');
+let all = [];
+
+
+
+//* Los tipos de colores en este casso se manejaron dentro de las*//
+
+const TYPE_COLORS = {
+  fuego:'#ef4444', agua:'#3b82f6', gass:'#22c55e', electricidad:'#facc15', hielo:'#67e8f9',
+  peledores:'#f97316', poison:'#a855f7', ground:'#f59e0b', volador:'#60a5fa', psysico:'#ec4899',
+  bug:'#84cc16', roca:'#a3a3a3', fantasmas:'#8b5cf6', oscuridad:'#334155', dragon:'#7c3aed',
+  habilidad:'#94a3b8', fairy:'#f472b6', normal:'#d4d4d8'
+};
+//* funbciones de la iformacion solicitada de los pokemosnes*//
+function cap(s){return s[0].toUpperCase()+s.slice(1)}
+function pad(n){return '#'+String(n).padStart(3,'0')}
+
+async function loadTypes(){
+  const r = await fetch(`${API}/type`);
+  const j = await r.json();
+  j.results.forEach(t=>{
+    const o = document.createElement('option');
+    o.value=t.name; o.textContent=cap(t.name); sel.appendChild(o);
+  })
+}
+
+async function loadAll(){
+  try{
+    const r = await fetch(`${API}/pokemon?limit=999`);
+    const j = await r.json();
+    const chunks = [];
+    for(let i=0;i<j.results.length;i+=20) chunks.push(j.results.slice(i,i+20));
+    for(const c of chunks){
+      const d = await Promise.all(c.map(p=>fetch(p.url).then(x=>x.json())));
+      all.push(...d.map(p=>({
+        id:p.id,
+        name:p.name,
+        img:p.sprites.other['official-artwork'].front_default,
+        types:p.types.map(t=>t.type.name)
+      })));
+      render();
+    }
+  }catch(e){
+    msg.innerHTML = '<div class="error"> No me esta cargando la pagina gracias</div>'
+  }
+}
+
+function passFilters(p){
+  const text = q.value.trim().toLowerCase();
+  const types = [...sel.selectedOptions].map(o=>o.value);
+  let okText = true, okType = true;
+  if(text){ okText = p.name.includes(text) || String(p.id)===text }
+  if(types.length){ okType = types.some(t=>p.types.includes(t)) }
+  let ok = okText && okType;
+  return not.checked ? !ok : ok;
+}
+
+function render(){
+  grid.innerHTML='';
+  all.filter(passFilters).forEach(p=>{
+    const c=document.createElement('div'); c.className='card';
+    c.innerHTML=`<img src="${p.img}" alt="${p.name}"/><div class="id">${pad(p.id)}</div><strong>${cap(p.name)}</strong><div class="types">${p.types.map(t=>`<span class="type" style="background:${TYPE_COLORS[t]||'#374151'}">${cap(t)}</span>`).join('')}</div>`;
+    grid.appendChild(c);
+  })
+}
+
+[q,sel,not].forEach(el=>el.addEventListener('input',render));
+loadTypes(); loadAll();
+</script>
+</body>
+</html>
